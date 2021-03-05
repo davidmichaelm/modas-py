@@ -5,6 +5,7 @@ import datetime as dt
 import random
 import requests
 import json
+import jwt
 
 class Modas:
     def __init__(self):
@@ -22,7 +23,7 @@ class Modas:
         self.pir = MotionSensor(12)
         
         # when button  is released, toggle system arm / disarm
-        self.button.when_released = self.toggle
+        self.button.when_released = self.init_alert
         
         # system is disarmed by default
         self.armed = False
@@ -59,10 +60,47 @@ class Modas:
     
     def get_random_location(self):
         return random.randint(1, 3)
+    
+    def get_token(self):
+        try:
+            # attempt to open the file token.json for reading
+            f = open("token.json", "r")
+            # assuming the file can be opened, read the file into a variable
+            # convert the string into json
+            encoded_token = json.loads(f.read())
+            f.close()
+            # using jwt package decode the token
+            # all we are looking for is the token expiration (exp)
+            unencoded_token = jwt.decode(encoded_token["token"], verify = False)
+
+            # save the exp date (remember it is in Unix timestamp format)
+            exp_epoch = int(unencoded_token["exp"])
+
+            # get current date/time
+            today = dt.datetime.now()
+            # convert current date/time to UNIX timestamp (Epoch)
+            current_epoch = int(today.timestamp())
+
+            # subtract the current date/time from the exp date/time
+            # if the difference is positive the token is not yet expired
+            diff = exp_epoch - current_epoch
+            if diff > 0:
+                return encoded_token["token"]
+            else:
+                print("Token is expired")
+                return None
+
+        except:
+            print("An error occurred")
         
     def post_event(self, timestamp, flagged, location):
+        token = self.get_token()
+        print(token)
+        if token == None:
+            return
+        
         url = 'https://modas-jsg.azurewebsites.net/api/event/'
-        headers = { 'Content-Type': 'application/json'}
+        headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
         payload = { 'timestamp': self.get_json_timestamp(timestamp), 'flagged': flagged, 'locationId': location }
         print(payload)
         
